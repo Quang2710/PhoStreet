@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Phở Loạn Phố</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div id="game"></div>
+  <div id="overlay"></div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div id="orders"></div>
+    <div id="levelname"></div>
+    <div id="versus" class="hidden"></div>
+    <div id="scorebox">
+      <div class="coin">₫</div>
+      <div><div id="score">0</div><div id="tipmult">Tip x1</div></div>
+    </div>
+    <div id="timerbox">
+      <div id="timer">03:00</div>
+      <div class="tbar"><i id="timerbar"></i></div>
+    </div>
+    <div id="hint"></div>
+  </div>
+  <div id="banner"></div>
+  <div id="combo"></div>
+  <div id="countdown"></div>
+
+  <!-- MENU -->
+  <div id="menu" class="screen">
+    <div class="menu-inner">
+      <div class="logo">
+        <div class="logo-top">🍜 PHỞ <span>LOẠN</span> PHỐ 🛵</div>
+        <div class="logo-sub">Nấu ăn co-op hỗn loạn giữa lòng ẩm thực đường phố Việt Nam</div>
+      </div>
+
+      <div class="section-title">Chế độ chơi</div>
+      <div id="modes" class="modes">
+        <button data-mode="coop" class="mode active"><b>👫 Co-op 2 người</b><small>Cùng bàn phím / 2 tay cầm</small></button>
+        <button data-mode="solo" class="mode"><b>🧑‍🍳 Một mình</b><small>Điều khiển 2 đầu bếp, Tab để đổi</small></button>
+        <button data-mode="versus" class="mode"><b>🤜 Bạn thân hay kẻ thù</b><small>Ai gây va chạm nhiều hơn thì thua</small></button>
+      </div>
+
+      <div class="section-title">Chọn màn</div>
+      <div id="levels" class="levels"></div>
+
+      <div class="bottom-row">
+        <div class="controls">
+          <div class="ctl p0"><h4>🔴 Bếp Hà (nón lá)</h4>
+            <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> di chuyển</p>
+            <p><kbd>E</kbd>/<kbd>Space</kbd> nhặt / đặt · <kbd>F</kbd> (giữ) thái</p>
+            <p><kbd>Q</kbd> ném · <kbd>Shift trái</kbd> lao / húc</p></div>
+          <div class="ctl p1"><h4>🔵 Bếp Sơn (khăn rằn)</h4>
+            <p><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> di chuyển</p>
+            <p><kbd>.</kbd>/<kbd>Enter</kbd>/<kbd>Num1</kbd> nhặt · <kbd>/</kbd>/<kbd>Num2</kbd> thái</p>
+            <p><kbd>,</kbd>/<kbd>Num3</kbd> ném · <kbd>Shift phải</kbd>/<kbd>Num0</kbd> lao</p></div>
+          <div class="ctl"><h4>🎮 Tay cầm</h4>
+            <p>Cần trái di chuyển · A nhặt · X thái</p>
+            <p>B ném · RB/RT lao · Y đổi đầu bếp (solo)</p>
+            <p><kbd>Esc</kbd> tạm dừng</p></div>
+        </div>
+        <div class="howto">
+          <h4>📖 Cách nấu</h4>
+          <p>Lấy nguyên liệu từ thùng → sơ chế (thớt 🔪, nồi ♨️, vỉ nướng 🔥) → bày vào bát 🥣 → mang ra <b>cửa ra món</b> (quầy xanh).</p>
+          <p>Lao vào nhau sẽ <b>văng đồ</b>! Đồ văng trúng cửa ra món = <b>cú va ngoạn mục</b> +20. Bắt được đồ bay = cứu bóng!</p>
+          <div class="toggles">
+            <label><input type="checkbox" id="optMusic" checked> 🎵 Nhạc</label>
+            <label><input type="checkbox" id="optTTS" checked> 🗣️ Lồng tiếng (nếu máy có giọng Việt)</label>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAUSE -->
+  <div id="pause" class="screen hidden">
+    <div class="panel">
+      <h2>⏸️ Tạm dừng</h2>
+      <button id="btnResume" class="big">Chơi tiếp</button>
+      <button id="btnRestart">Chơi lại màn</button>
+      <button id="btnMenu">Về menu</button>
+    </div>
+  </div>
+
+  <!-- RESULT -->
+  <div id="result" class="screen hidden">
+    <div class="panel wide">
+      <h2 id="resTitle">Hết giờ!</h2>
+      <div id="resStars" class="stars"></div>
+      <div id="resScore" class="res-score"></div>
+      <div id="resVersus"></div>
+      <div id="resStats" class="res-stats"></div>
+      <div class="row">
+        <button id="btnAgain">Chơi lại</button>
+        <button id="btnNext" class="big">Màn tiếp ▶</button>
+        <button id="btnMenu2">Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
