@@ -40,7 +40,7 @@ export const LEVELS = [
     desc: 'Bếp bé xíu, ghế nhựa thấp. Công an thổi còi dẹp hàng, khách vứt vỏ chuối bừa bãi.',
     recipes: ['pho', 'caphe'], crates: ['banhpho', 'bo', 'hanh', 'caphe', 'trung'],
     events: ['police', 'banana', 'inspector'], modifiers: [], duration: 180, stars: [90, 200, 320],
-    theme: { floor: 0x9e9e9e, floor2: 0x8a8a8a, counter: 0xd9a066, ground: 0x6d6d6d, sky: 0xffe0b2 },
+    theme: { floor: 0x9e9e9e, floor2: 0x8a8a8a, counter: 0xd9a066, ground: 0x6d6d6d, sky: 0xffe0b2, tiles: ['#a19c93', '#928c81', '#a07a6c'] },
     map: [
       '##1#2#3##WW###',
       '#............#',
@@ -73,7 +73,7 @@ export const LEVELS = [
     desc: 'Xe máy phóng ngang qua bếp, thanh tra vệ sinh ghé thăm. Bánh mì với bún chả bán chạy như tôm tươi.',
     recipes: ['banhmi', 'buncha'], crates: ['banhmi', 'thit', 'rau', 'bun'],
     events: ['moto', 'moto', 'inspector', 'banana'], modifiers: [], duration: 180, stars: [90, 210, 330],
-    theme: { floor: 0xbdbdbd, floor2: 0xa8a8a8, counter: 0xffb74d, ground: 0x555555, sky: 0xfff3e0 },
+    theme: { floor: 0xbdbdbd, floor2: 0xa8a8a8, counter: 0xffb74d, ground: 0x555555, sky: 0xfff3e0, tiles: ['#b0ada4', '#a19d92', '#7c9a91'] },
     map: [
       '###1#2##WW#3##',
       '#............#',
@@ -90,7 +90,7 @@ export const LEVELS = [
     desc: 'Gói bánh chưng, nồi nước sôi cả đêm. Pháo nổ đì đùng làm giật mình rơi đồ, lâu lâu mất điện.',
     recipes: ['banhchung', 'pho'], crates: ['ladong', 'nep', 'thit', 'banhpho', 'bo', 'hanh'],
     events: ['firecracker', 'firecracker', 'power'], modifiers: [], duration: 200, stars: [100, 230, 360],
-    theme: { floor: 0xa1887f, floor2: 0x8d6e63, counter: 0xc62828, ground: 0x4e342e, sky: 0x311b2b, night: true },
+    theme: { floor: 0xa1887f, floor2: 0x8d6e63, counter: 0xc62828, ground: 0x4e342e, sky: 0x311b2b, night: true, tiles: ['#ad9182', '#987a6a', '#a6594d'] },
     map: [
       '##1#2#3#WW#####',
       '#.............#',
@@ -129,10 +129,12 @@ export const LINES = {
 };
 
 export const CUSTOMERS = [
-  { id: 'xeom', name: 'Bác xe ôm', shirt: 0x2e7d32, hat: 'helmet', angry: ['Đồ ăn bay vào mặt tôi rồi!', 'Nấu kiểu gì vậy hả!', 'Ơ kìa!'], laugh: ['Hà hà, vui đấy!'], happy: ['Ngon! Thêm tip này!', 'Chuẩn vị!'] },
-  { id: 'banhang', name: 'Cô bán hàng rong', shirt: 0xad1457, hat: 'nonla', angry: ['😒 Lườm...', 'Hừm!', 'Chậm như rùa!'], laugh: ['Ối giồi, đóng phim à?'], happy: ['Được đấy cháu!', 'Mai cô quay lại!'] },
-  { id: 'embe', name: 'Em bé', shirt: 0xffb300, hat: 'none', small: true, angry: ['Hihihi 😆', 'Lại nữa đi!'], laugh: ['Khanh khách 😆', 'Hahaha!'], happy: ['Ngon quá à!', 'Yeah!'] },
-  { id: 'dulich', name: 'Khách du lịch', shirt: 0x1e88e5, hat: 'cap', angry: ['Oh no!', 'What?!'], laugh: ['Haha, so fun!', '📸 Click!'], happy: ['Very ngon!', 'Delicious!'] },
+  { id: 'xeom', emoji: '🛵', name: 'Bác xe ôm', angry: ['Đồ ăn bay vào mặt tôi rồi!', 'Nấu kiểu gì vậy hả!', 'Ơ kìa!'], laugh: ['Hà hà, vui đấy!', 'Xem phim hài à!'], happy: ['Ngon! Thêm tip này!', 'Chuẩn vị!'], grumpy: ['Lâu thế, tôi còn chạy cuốc!', 'Nhanh lên cho tôi nhờ!'], furious: ['Đợi cả buổi rồi đấy!!', 'Thôi tôi đi đây!!'] },
+  { id: 'banhang', emoji: '👒', name: 'Cô bán hàng rong', angry: ['Lườm... 😒', 'Hừm!', 'Chậm như rùa!'], laugh: ['Ối giồi, đóng phim à?'], happy: ['Được đấy cháu!', 'Mai cô quay lại!'], grumpy: ['Chậc... lâu quá!', 'Cô còn phải đi bán nữa!'], furious: ['Quán gì mà chậm thế hả!!', 'Không ăn nữa!!'] },
+  { id: 'embe', emoji: '👶', name: 'Em bé', small: true, angry: ['Hihihi 😆', 'Lại nữa đi!'], laugh: ['Khanh khách 😆', 'Hahaha!'], happy: ['Ngon quá à!', 'Yeah!'], grumpy: ['Mẹ ơi con đói...', 'Bao giờ có ạ...'], furious: ['Oaaaa! Con đói!!', 'Huhuhu!!'] },
+  { id: 'cuoi', emoji: '👴', name: 'Ông cụ nón cối', angry: ['Thời bọn tôi không thế này!', 'Hừ, phí của!'], laugh: ['Khà khà khà!'], happy: ['Ngon như phở ngày xưa!', 'Được, khá lắm!'], grumpy: ['Hừm... thời buổi gì mà chậm thế', 'Tôi đợi mỏi cả lưng rồi'], furious: ['Hỗn láo! Bắt người già chờ!!', 'Gọi chủ quán ra đây!!'] },
+  { id: 'nusinh', emoji: '👩‍🎓', name: 'Nữ sinh áo dài', angry: ['Ơ hay!', 'Bẩn áo dài em rồi!'], laugh: ['Hihi, đáng yêu ghê!'], happy: ['Ngon xỉu luôn!', 'Đỉnh nóc kịch trần!'], grumpy: ['Trễ học mất thôi...', 'Ủa sao lâu vậy ta?'], furious: ['Em trễ giờ rồi nè!!', 'Không chờ nổi nữa!!'] },
+  { id: 'dulich', emoji: '🧳', name: 'Khách Tây balo', angry: ['Oh no!', 'What?!'], laugh: ['Haha, so fun!', '📸 Click!'], happy: ['Very ngon!', 'Số dzách!'], grumpy: ['Hmm... still waiting?', 'Lâu quá nha!'], furious: ['Too slow!!', 'Oh my god!!'] },
 ];
 
 export const EVENT_INFO = {
@@ -146,3 +148,15 @@ export const EVENT_INFO = {
   bigwave:     { banner: '🌊 Sóng lớn! Bám chắc vào!', sfx: 'wave' },
   fogthick:    { banner: '🌫️ Sương mù kéo tới!', sfx: 'wave' },
 };
+
+// Câu than chung theo tâm trạng (dùng khi khách không có câu riêng)
+export const MOOD_LINES = {
+  grumpy: ['Lâu thế nhỉ...', 'Đói meo rồi đây!', 'Nhanh lên giùm cái!', 'Chậc chậc...'],
+  angry: ['Bao giờ mới có hả?!', 'Chậm như rùa!', 'Quán gì kỳ vậy!'],
+  furious: ['Thôi tôi đi quán khác!!', 'Trời ơi là trời!!'],
+  sad: ['Huhu đói quá...', 'Thôi về vậy...', 'Buồn ghê...'],
+  wrong: ['Tôi gọi món khác cơ!', 'Ơ, không phải món này!'],
+  order: ['Cho một bát nhé!', 'Làm cho tôi một phần!', 'Chủ quán ơi!'],
+};
+export const CHEF_SAD = ['Tiếc quá!', 'Huhu đổ hết rồi...', 'Công cốc rồi!', 'Hỏng bét!'];
+export const CHEF_FURIOUS = ['Lại nữa à?!!', 'Tức quá đi mất!!', 'Đứng yên đó!!'];

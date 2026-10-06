@@ -12,3 +12,4 @@ npm run preview   # chạy thử bản build
 - `src/data.js` – nguyên liệu, món ăn, bản đồ các màn, câu thoại
 - `src/game.js` – lõi game (vật lý, nấu nướng, sự kiện, tính điểm)
 - `src/models.js` – mô hình 3D, `src/audio.js` – âm thanh WebAudio, `src/main.js` – menu/HUD
+- `src/ornaments.js` – hoạ tiết SVG (trống đồng, đèn lồng, nón lá, khăn rằn, đồng xu, bát phở), `src/style.css` – giao diện

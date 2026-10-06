@@ -1,7 +1,8 @@
 import * as THREE from 'three';
-import { INGREDIENTS, RECIPES, LEVELS, LINES, CUSTOMERS, EVENT_INFO } from './data.js';
+import { INGREDIENTS, RECIPES, LEVELS, LINES, CUSTOMERS, EVENT_INFO, MOOD_LINES, CHEF_SAD, CHEF_FURIOUS } from './data.js';
 import { Audio } from './audio.js';
 import { Models } from './models.js';
+import { Chars } from './characters.js';
 
 // ===== Lõi game: Phở Loạn Phố =====
 export const Game = (() => {
@@ -23,7 +24,7 @@ export const Game = (() => {
   window.addEventListener('keydown', e => {
     if (!e.repeat) Input.pressed.add(e.code);
     Input.down.add(e.code);
-    if (G && G.state === 'play' && PREVENT.has(e.code)) e.preventDefault();
+    if (G && G.state === 'play' && !paused && PREVENT.has(e.code)) e.preventDefault();
   });
   window.addEventListener('keyup', e => Input.down.delete(e.code));
   window.addEventListener('blur', () => Input.down.clear());
@@ -104,6 +105,7 @@ export const Game = (() => {
     const th = lv.theme;
     const H = lv.map.length, W = Math.max(...lv.map.map(r => r.length));
     G = {
+      fx: [], inspector: null,
       lv, levelIndex, mode, W, H, ox: -W / 2 + 0.5, oz: -H / 2 + 0.5,
       tiles: [], floorTiles: [], lanes: [], chefs: [], floor: [], proj: [], puddles: [], bananas: [],
       npcs: [], particles: [], labels: [], bars: new Map(), customers: [], orders: [], pendingPots: [],
@@ -136,7 +138,8 @@ export const Game = (() => {
     scene.add(ground);
     G.ground = ground;
 
-    // Ô bếp
+    // Ô bếp (sàn lát gạch bông nếu màn có khai báo theme.tiles)
+    const floorMat = th.tiles ? Models.gachBong(th.tiles) : null;
     for (let r = 0; r < H; r++) {
       G.tiles[r] = [];
       for (let c = 0; c < W; c++) {
@@ -154,7 +157,7 @@ export const Game = (() => {
         const t = { c, r, x, z, type, crate, item: null, mesh: null };
         G.tiles[r][c] = t;
         // sàn
-        const fl = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), Models.M((c + r) % 2 ? th.floor : th.floor2));
+        const fl = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), floorMat || Models.M((c + r) % 2 ? th.floor : th.floor2));
         fl.rotation.x = -Math.PI / 2; fl.position.set(x, 0.001, z); fl.receiveShadow = true; world.add(fl);
         if (type === 'floor') { G.floorTiles.push(t); continue; }
         t.mesh = Models.makeTile(ch === '#' ? '#' : ch, th, crate);
@@ -173,24 +176,25 @@ export const Game = (() => {
     // Highlight mục tiêu cho từng đầu bếp
     // Đầu bếp
     const defs = [
-      { shirt: 0xd84315, hat: 'nonla', ring: 0xff3d00, region: 'north', name: 'Bếp Hà' },
-      { shirt: 0x1565c0, hat: 'khanran', ring: 0x2979ff, region: 'south', name: 'Bếp Sơn' },
+      { look: 'ha', ring: 0xff3d00, region: 'north', name: 'Bếp Hà' },
+      { look: 'son', ring: 0x2979ff, region: 'south', name: 'Bếp Sơn' },
     ];
     const spawns = G.floorTiles.length ? [G.floorTiles[Math.floor(G.floorTiles.length * 0.3)], G.floorTiles[Math.floor(G.floorTiles.length * 0.7)]] : [];
     defs.forEach((d, i) => {
-      const mesh = Models.makeChef(d);
+      const mesh = Chars.makeChef(d);
       world.add(mesh);
       const hl = new THREE.Mesh(new THREE.BoxGeometry(1.04, 0.06, 1.04), new THREE.MeshBasicMaterial({ color: d.ring, transparent: true, opacity: 0.35, depthWrite: false }));
-      hl.visible = false; world.add(hl);
+      hl.visible = false; hl.userData.keep = true; world.add(hl);
       const sp = spawns[i] || { x: i, z: 0 };
       mesh.position.set(sp.x, 0, sp.z);
       G.chefs.push({
         id: i, def: d, mesh, hl, x: sp.x, z: sp.z, y: 0, vx: 0, vz: 0, vy: 0, face: 0, faceTarget: 0,
-        holding: null, stun: 0, spinT: 0, dashCd: 0, dashT: 0, bumpCd: 0, npcCd: 0, anim: 0, chopping: false, chopSfx: 0, caused: 0,
+        holding: null, stun: 0, spinT: 0, squash: 0, mood: null, moodT: 0, steamT: 0, dustT: 0, wasStun: false, dashCd: 0, dashT: 0, bumpCd: 0, npcCd: 0, anim: 0, chopping: false, chopSfx: 0, caused: 0,
       });
     });
 
     decorate(lv);
+    Chars.optimize(world);
     placeCamera();
     G.ordersDirty = true;
     if (api.onHud) api.onHud(G);
@@ -201,11 +205,18 @@ export const Game = (() => {
     const th = lv.theme, W = G.W, H = G.H, ox = G.ox, oz = G.oz;
     const add = (m, x, y, z, ry = 0) => { m.position.set(x, y, z); m.rotation.y = ry; world.add(m); return m; };
     const topZ = oz - 0.5; // mép trên bếp
-    // Biển hiệu neon
-    const signText = { hanoi: 'PHỞ LOẠN PHỐ', mientay: 'GHE BÁN ĐỦ MÓN', benthanh: 'BÁNH MÌ - BÚN CHẢ', tet: 'CHÚC MỪNG NĂM MỚI', sapa: 'PHỞ SAPA' }[lv.id];
-    const sign = Models.textPlane(signText, 5, 0.9, 'rgba(20,10,30,0.92)', lv.id === 'tet' ? '#ffd54f' : '#4dd0ff');
+    // Biển hiệu kẻ tay kiểu quán Việt
+    const SIGNS = {
+      hanoi:    { title: 'PHỞ LOẠN PHỐ', sub: 'GIA TRUYỀN · SỐ 36 PHỐ HỖN LOẠN', bg: ['#d8432f', '#a8231a'], fg: '#ffd34d', edge: '#e2b04a' },
+      mientay:  { title: 'GHE BÁN ĐỦ MÓN', sub: 'BÁNH XÈO · GỎI CUỐN', bg: ['#1f7a8c', '#135565'], fg: '#fff3c4', edge: '#f2c14e' },
+      benthanh: { title: 'BÁNH MÌ - BÚN CHẢ', sub: 'NGON · BỔ · RẺ', bg: ['#ffd34d', '#f0b429'], fg: '#c62f22', edge: '#c62f22' },
+      tet:      { title: 'CHÚC MỪNG NĂM MỚI', sub: 'AN KHANG THỊNH VƯỢNG', bg: ['#d8432f', '#8e1c14'], fg: '#ffd54f', edge: '#ffd54f' },
+      sapa:     { title: 'PHỞ SAPA', sub: 'NÓNG HỔI VỪA THỔI VỪA ĂN', bg: ['#5d3a24', '#3b2416'], fg: '#fbe3b0', edge: '#c49a5a' },
+    };
+    const sign = Models.signBoard(SIGNS[lv.id] || SIGNS.hanoi, 5, 1.1);
     sign.position.set(-W / 2 + 3.2, 2.6, topZ - 0.3); world.add(sign);
-    const post = Models.box(0.12, 2.6, 0.12, 0x333333, -W / 2 + 3.2, 1.3, topZ - 0.35); world.add(post);
+    // hai cột đỡ nằm sau mặt biển
+    for (const dx of [-2.2, 2.2]) world.add(Models.box(0.1, 2.7, 0.1, 0x3e2723, -W / 2 + 3.2 + dx, 1.35, topZ - 0.4));
 
     // Khách hàng ngồi ghế nhựa phía trên quầy ra món
     const stoolColors = [0xe53935, 0x1e88e5, 0x43a047, 0xfdd835];
@@ -220,10 +231,12 @@ export const Game = (() => {
         const def = CUSTOMERS[(k + ri) % CUSTOMERS.length];
         const cx = x + (k % 2 ? 0.75 : -0.75);
         if (lv.id !== 'mientay') add(Models.makeStool(stoolColors[k % 4]), cx, 0, zz + 0.35);
-        const cm = Models.makeCustomer(def);
+        const cm = Chars.makeCustomer(def);
         add(cm, cx, lv.id === 'mientay' ? -0.1 : 0, zz + 0.35);
         cm.lookAt(cx * 0.3, 0, oz + 2);
-        G.customers.push({ mesh: cm, def, x: cx, z: zz + 0.35, jumpT: 0, cd: 0, baseY: cm.position.y });
+        // bát phở trên bàn
+        if (lv.id !== 'mientay') { const bowl = Models.makePlate(['banhpho:cooked', 'bo:chopped']); bowl.scale.setScalar(0.6); add(bowl, x + (k % 2 ? 0.25 : -0.25), 0.57, zz); }
+        G.customers.push({ mesh: cm, def, x: cx, z: zz + 0.35, jumpT: 0, cd: 0, baseY: cm.position.y, mood: null, moodT: 0, order: null, nag: 3, sulkT: 0, sulkMood: null, steamT: 0 });
         k++;
       }
     });
@@ -261,7 +274,7 @@ export const Game = (() => {
       // phố: cây, xe máy dựng, đèn lồng
       add(Models.makeTree(0x43a047, lv.id === 'hanoi'), sideL, 0, -1);
       add(Models.makeTree(0x2e7d32), sideR, 0, 1.8);
-      for (let i = 0; i < 3; i++) add(Models.makeMotoParked([0xe53935, 0x1e88e5, 0x212121][i]), sideL - 0.2, 0, 0.6 + i * 1.3, Math.PI / 2 + 0.25);
+      for (let i = 0; i < 3; i++) add(Chars.makeMoto({ color: [0xe53935, 0x1e88e5, 0x212121][i] }), sideL - 0.2, 0, 0.6 + i * 1.3, Math.PI / 2 + 0.25);
       for (let i = 0; i < 4; i++) add(Models.makeLantern(0xffb300), W / 2 - 1 - i * 1.4, 2.3, topZ - 0.2);
       if (lv.id === 'hanoi') for (let i = 0; i < 4; i++) add(Models.makeStool(stoolColors[i]), sideR + (i % 2) * 0.5, 0, -2.5 + i * 0.6);
     }
@@ -400,7 +413,7 @@ export const Game = (() => {
     const t = tg.tile;
     if (t.type === 'trash') { trashHeld(ch); return; }
     if (t.type === 'window') {
-      if (h.kind === 'plate') { if (serve(h, t, false)) { ch.holding = null; detach(h); } }
+      if (h.kind === 'plate') { if (serve(h, t, false)) { ch.holding = null; detach(h); chefMood(ch, 'happy', 1.6, '🤩'); } else if (h.contents.length) chefMood(ch, 'grumpy', 1.2); }
       else popup('Bày ra bát đã!', t.x, 1.6, t.z, 'warn');
       return;
     }
@@ -479,10 +492,14 @@ export const Game = (() => {
     if (idx < 0) {
       popup(plate.contents.length ? 'Sai món rồi!' : 'Bát trống trơn!', t.x, 1.7, t.z, 'warn');
       Audio.play('wrong');
+      const waiting = G.customers.filter(c => c.order && c.cd <= 0);
+      if (plate.contents.length && waiting.length) customerReact('wrong', 0, 0, pick(waiting));
       return false;
     }
     const o = G.orders[idx];
+    o.done = 'served';
     const rc = RECIPES[o.recipe];
+    const served = o.cust;
     const tip = Math.ceil(rc.price * 0.5 * (o.t / o.max)) * G.tipMult;
     let gain = rc.price + tip;
     if (spectacular) { gain += 20; G.stats.spectacular++; banner('🤯 CÚ VA NGOẠN MỤC! Món bay thẳng vào cửa! +20', 2.5); }
@@ -492,7 +509,8 @@ export const Game = (() => {
     G.tipMult = Math.min(4, G.tipMult + 1);
     Audio.play('serve');
     for (let i = 0; i < 18; i++) spark(t.x, 1.2, t.z, [0xffeb3b, 0xff5252, 0x69f0ae, 0x40c4ff][i % 4], 1, 4);
-    customerReact('happy', t.x, t.z);
+    if (served) { served.order = null; served.cd = 0; served.sulkT = 0; customerReact('happy', 0, 0, served); }
+    else customerReact('happy', t.x, t.z);
     return true;
   }
 
@@ -525,6 +543,7 @@ export const Game = (() => {
           if (!ch.holding && ch.stun <= 0) {
             G.proj.splice(i, 1); resetRot(p.it); give(ch, p.it);
             Audio.play('catch'); say(ch, pick(LINES.catch));
+            chefMood(ch, 'happy', 1.2, '😎');
             G.stats.catches++;
             if (p.fromBump) { addScore(8, ch.x, ch.z, 'Cứu bóng! +8'); }
             done = true;
@@ -605,6 +624,7 @@ export const Game = (() => {
 
   function spill(x, z, color) {
     G.stats.spills++;
+    chefMood(nearestChef(x, z), 'sad', 1.8, '😭', pick(CHEF_SAD));
     Audio.play('splash');
     if (color) addPuddle(x, z, color, 0.75, 30);
     for (let i = 0; i < 10; i++) spark(x, 0.2, z, color || 0xffffff, 1, 3);
@@ -615,7 +635,7 @@ export const Game = (() => {
     detach(p.it);
     if (p.it.kind === 'pot') G.pendingPots.push(6);
     const food = p.it.kind === 'plate' ? p.it.contents.length > 0 : p.it.kind !== 'pot';
-    if (food) { addScore(-5, p.x, p.z, 'Bay ra đường! -5'); G.stats.spills++; }
+    if (food) { addScore(-5, p.x, p.z, 'Bay ra đường! -5'); G.stats.spills++; chefMood(nearestChef(p.x, p.z), 'cry', 1.6, '😭'); }
     Audio.play('boing');
     customerReact(Math.random() < 0.5 ? 'angry' : 'laugh', p.x, p.z);
   }
@@ -685,21 +705,45 @@ export const Game = (() => {
 
     // hoạt cảnh
     const spd = Math.hypot(ch.vx, ch.vz);
-    ch.anim += dt * spd * 3;
-    u.body.position.y = spd > 0.6 ? Math.abs(Math.sin(ch.anim)) * 0.08 : 0;
-    u.body.rotation.z = spd > 0.6 ? Math.sin(ch.anim) * 0.07 : 0;
-    u.body.rotation.x = ch.stun > 0 ? -0.3 : 0;
-    if (ch.holding) { u.handL.position.set(-0.2, 0.6, 0.38); u.handR.position.set(0.2, 0.6, 0.38); }
-    else if (ch.chopping) {
-      const s = Math.sin(G.time * 30) * 0.15;
-      u.handR.position.set(0.2, 0.7 + s, 0.4); u.handL.position.set(-0.22, 0.55, 0.35);
-    } else {
-      const s = spd > 0.6 ? Math.sin(ch.anim) * 0.12 : 0;
-      u.handL.position.set(-0.32, 0.5, 0.05 + s); u.handR.position.set(0.32, 0.5, 0.05 - s);
+    ch.anim += dt * Math.max(spd, 0.001) * 2.6;
+    ch.moodT -= dt;
+    if (ch.moodT <= 0) ch.mood = null;
+    // hết choáng thì cáu; bị va liên tục thì điên tiết
+    if (ch.wasStun && ch.stun <= 0) {
+      if (G.combo >= 3) chefMood(ch, 'furious', 1.8, '🤬', pick(CHEF_FURIOUS));
+      else chefMood(ch, 'angry', 1.2);
     }
+    if (ch.mood === 'furious' || ch.mood === 'angry') {
+      ch.steamT -= dt;
+      if (ch.steamT <= 0) { ch.steamT = ch.mood === 'furious' ? 0.1 : 0.3; steamHead(ch.x, ch.y + 1.65, ch.z); }
+    }
+    ch.wasStun = ch.stun > 0;
+    const moving = spd > 0.6;
+    u.body.position.y = moving ? Math.abs(Math.sin(ch.anim)) * 0.09 : 0;
+    u.body.rotation.z = moving ? Math.sin(ch.anim) * 0.06 : 0;
+    u.body.rotation.x = ch.stun > 0 ? -0.25 : moving ? 0.12 : 0;
+    // nảy bẹp (squash & stretch)
+    ch.squash *= Math.exp(-dt * 7);
+    const sq = Math.sin(G.time * 30) * ch.squash;
+    u.body.scale.set(1 + sq * 0.35, 1 - sq * 0.35, 1 + sq * 0.35);
+    const free = !ch.holding && !ch.chopping;
+    Chars.animPerson(u, {
+      t: G.time, phase: ch.anim, moving, holding: !!ch.holding, chop: ch.chopping, stun: ch.stun > 0,
+      cheer: ch.mood === 'happy' && ch.moodT > 0.6 && free, mood: free && ch.mood !== 'happy' ? ch.mood : null,
+    });
+    Chars.setFace(u.face, ch.stun > 0 ? 'stun' : ch.mood ? ch.mood : ch.chopping ? 'focus' : ch.dashT > 0 ? 'shock' : 'normal');
     u.stars.visible = ch.stun > 0;
     u.stars.rotation.y += dt * 8;
-    u.mouth.scale.set(ch.stun > 0 ? 0.8 : 1, ch.stun > 0 ? 4 : 1, 1);
+    // bụi khi chạy, mồ hôi khi choáng
+    ch.dustT -= dt;
+    if (spd > 3.2 && ch.y === 0 && ch.dustT <= 0) {
+      ch.dustT = ch.dashT > 0 ? 0.03 : 0.12;
+      particle(ch.x - ch.vx * 0.05, 0.1, ch.z - ch.vz * 0.05, 0xe0d6cc, 0.09, -ch.vx * 0.1, 0.6, -ch.vz * 0.1, 0.5, -0.4);
+    }
+    if (ch.stun > 0 && Math.random() < dt * 10) {
+      const a = Math.random() * Math.PI * 2;
+      particle(ch.x, 1.6 + ch.y, ch.z, 0x81d4fa, 0.05, Math.cos(a) * 1.6, 2.2, Math.sin(a) * 1.6, 0.6, 9);
+    }
     const inactive = G.mode === 'solo' && G.active !== ch.id;
     u.ring.material.opacity = inactive ? 0.25 : 0.85;
 
@@ -740,6 +784,7 @@ export const Game = (() => {
     ch.stun = 1.1; ch.spinT = 1.0; ch.vy = 3;
     Audio.play('slip');
     say(ch, pick(LINES.slip));
+    ch.squash = 1; fxEmote(ch, '😵');
     dropHeld(ch, fx, fz);
     G.shake = Math.max(G.shake, 0.25);
     registerChaos();
@@ -785,7 +830,9 @@ export const Game = (() => {
     G.stats.bumps++;
     causer.caused++;
     const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
-    popup(pick(['BỐP!', 'BỊCH!', 'RẦM!', 'UỲNH!']), mx, 1.9, mz, 'pow');
+    fxBurst(mx, 1.3, mz, pick(['BỐP!', 'BỊCH!', 'RẦM!', 'UỲNH!']));
+    a.squash = b.squash = 1;
+    setTimeout(() => { if (G) { fxEmote(a, '💢'); fxEmote(b, '💢'); } }, 350);
     for (let i = 0; i < 14; i++) spark(mx, 0.9, mz, i % 2 ? 0xffeb3b : 0xffffff, 1, 5);
     Audio.play('bigbump');
     G.shake = Math.max(G.shake, 0.45);
@@ -801,6 +848,7 @@ export const Game = (() => {
     ch.vx = nx * power; ch.vz = nz * power; ch.vy = 4;
     ch.stun = 1.0; ch.spinT = 0.6;
     dropHeld(ch, nx, nz);
+    ch.squash = 1; fxEmote(ch, '😱');
     say(ch, line || pick(LINES[ch.def.region]));
     Audio.play('bigbump');
     G.shake = Math.max(G.shake, 0.5);
@@ -816,36 +864,163 @@ export const Game = (() => {
   }
 
   // ---------------- CUSTOMERS ----------------
-  function customerReact(kind, x, z) {
+  const REACT_EMO = {
+    happy: ['❤️', '😋', '👍'], laugh: ['😂', '🤣'], angry: ['💢', '😡', '😤'],
+    grumpy: ['😒', '🙄', '😤'], furious: ['🤬', '💢', '🔥'], sad: ['😢', '😭', '💧'], cry: ['😭', '💧'], wrong: ['🤨', '❓'],
+  };
+  // Khách phản ứng tức thời. c: khách cụ thể (nếu không có thì chọn khách gần (x,z) hoặc ngẫu nhiên)
+  function customerReact(kind, x, z, c, text) {
     if (!G.customers.length) return;
-    let c;
-    if (x !== undefined) {
+    if (!c && x !== undefined) {
       let bd = 1e9;
       for (const cu of G.customers) { const d = Math.hypot(cu.x - x, cu.z - z); if (d < bd && cu.cd <= 0) { bd = d; c = cu; } }
     }
     if (!c) { const free = G.customers.filter(cu => cu.cd <= 0); if (!free.length) return; c = pick(free); }
-    c.cd = 2.5; c.jumpT = 0.6;
-    const text = pick(c.def[kind] || c.def.angry);
-    label(text, () => tv.set(c.x, c.baseY + 1.8, c.z), 'bubble cust ' + kind, 2.2);
+    const face = kind === 'wrong' ? 'grumpy' : kind;
+    c.cd = 2.5; c.jumpT = kind === 'sad' ? 0 : 0.6; c.mood = face; c.moodT = kind === 'furious' ? 2.8 : 2.2;
+    const line = text || pick(c.def[kind] || MOOD_LINES[kind] || c.def.angry);
+    label(line, () => tv.set(c.x, c.baseY + 2.0, c.z), 'bubble cust ' + face, 2.2);
+    fxEmoteAt(c.x, c.baseY + 1.75, c.z, pick(REACT_EMO[kind] || ['❓']), c.def.small ? 0.4 : 0.5);
+    if (kind === 'happy') for (let i = 0; i < 5; i++) setTimeout(() => G && fxEmoteAt(c.x + (Math.random() - 0.5) * 0.7, c.baseY + 1.3, c.z, '❤️', 0.25), i * 140);
     if (kind === 'laugh') Audio.play('laugh');
-    else if (kind === 'angry') Audio.play('grumble');
+    else if (kind === 'angry' || kind === 'furious' || kind === 'grumpy' || kind === 'wrong') Audio.play('grumble');
+  }
+
+  // Tâm trạng khi chờ món: bình thường → cọc cằn → giận → điên tiết
+  function waitMood(o) {
+    const f = o.t / o.max;
+    return f > 0.6 ? 'wait' : f > 0.35 ? 'grumpy' : f > 0.15 ? 'angry' : 'furious';
+  }
+
+  function steamHead(x, y, z) {
+    for (const sx of [-1, 1]) particle(x + sx * 0.25, y, z, 0xf5f5f5, 0.08, sx * 0.6, 1.6, 0, 0.7, -0.6);
   }
 
   function updateCustomers(dt) {
     for (const c of G.customers) {
-      c.cd -= dt;
-      c.jumpT -= dt;
+      c.cd -= dt; c.jumpT -= dt; c.moodT -= dt; c.sulkT -= dt;
+      if (c.moodT <= 0) c.mood = null;
+      const u = c.mesh.userData;
+      let m = c.mood;
+      if (!m && c.order) {
+        m = waitMood(c.order);
+        c.nag -= dt;
+        if (m !== 'wait' && c.nag <= 0 && c.cd <= 0) {
+          c.nag = m === 'furious' ? 3.5 : 6 + Math.random() * 4;
+          label(pick(c.def[m] || MOOD_LINES[m]), () => tv.set(c.x, c.baseY + 2.0, c.z), 'bubble cust ' + m, 2);
+          fxEmoteAt(c.x, c.baseY + 1.75, c.z, pick(REACT_EMO[m]), c.def.small ? 0.35 : 0.45);
+          if (m !== 'grumpy') { c.jumpT = 0.5; Audio.play('grumble'); }
+        }
+      }
+      if (!m && c.sulkT > 0) m = c.sulkMood;
+      if (m === 'furious' || m === 'angry') {
+        c.steamT -= dt;
+        if (c.steamT <= 0) { c.steamT = m === 'furious' ? 0.12 : 0.35; steamHead(c.x, c.baseY + 1.6, c.z); }
+      }
       const j = c.jumpT > 0 ? Math.abs(Math.sin(c.jumpT * 15)) * 0.25 : 0;
       c.mesh.position.y = c.baseY + j + (G.water ? Math.sin(G.time * 1.3 + c.x) * 0.05 : 0);
-      c.mesh.userData.head.rotation.z = Math.sin(G.time * 2 + c.x) * 0.08;
+      const bodyMood = ['grumpy', 'sad', 'cry', 'furious', 'angry'].includes(m) ? m : null;
+      Chars.animPerson(u, {
+        t: G.time, seated: true, eat: !m, cheer: m === 'happy', laugh: m === 'laugh', mood: bodyMood,
+        lookY: m === 'wait' ? Math.sin(G.time * 0.8 + u.seed) * 0.35 : 0,
+      });
+      Chars.setFace(u.face, !m || m === 'wait' ? 'normal' : m);
+      u.body.rotation.z = m === 'laugh' ? Math.sin(G.time * 30) * 0.06 : 0;
     }
+  }
+
+  // ---------------- CẢM XÚC ĐẦU BẾP ----------------
+  function chefMood(ch, mood, t, emoji, line) {
+    ch.mood = mood; ch.moodT = t;
+    if (emoji) fxEmote(ch, emoji);
+    if (line) say(ch, line);
+  }
+  function nearestChef(x, z) {
+    let best = G.chefs[0], bd = 1e9;
+    for (const ch of G.chefs) { const d = Math.hypot(ch.x - x, ch.z - z); if (d < bd) { bd = d; best = ch; } }
+    return best;
+  }
+
+  // ---------------- HIỆU ỨNG: EMOJI & VỤ NỔ ----------------
+  function fxEmoteAt(x, y, z, e, size = 0.5) {
+    const s = Chars.emote(e); s.position.set(x, y, z); s.scale.setScalar(0.01); world.add(s);
+    G.fx.push({ obj: s, kind: 'emote', life: 1.3, max: 1.3, size, vy: 0.6 });
+  }
+  function fxEmote(ch, e) { fxEmoteAt(ch.x + 0.25, ch.y + 2.05, ch.z, e, 0.55); }
+  function fxBurst(x, y, z, text, fill) {
+    const s = Chars.burst(text, fill); s.position.set(x, y, z); s.scale.setScalar(0.01); s.material.rotation = (Math.random() - 0.5) * 0.5; world.add(s);
+    G.fx.push({ obj: s, kind: 'burst', life: 0.65, max: 0.65, size: 1.7, vy: 0.4 });
+  }
+  function updateFx(dt) {
+    for (let i = G.fx.length - 1; i >= 0; i--) {
+      const f = G.fx[i];
+      f.life -= dt;
+      const age = f.max - f.life, k = Math.min(1, age / 0.18);
+      // bật nảy: phóng to vượt mức rồi co lại
+      const pop = k < 1 ? k * (1 + Math.sin(k * Math.PI) * 0.5) : 1;
+      f.obj.scale.setScalar(Math.max(0.01, f.size * pop));
+      f.obj.position.y += f.vy * dt;
+      f.obj.material.opacity = Math.min(1, f.life / 0.3);
+      if (f.life <= 0) { world.remove(f.obj); f.obj.material.dispose(); G.fx.splice(i, 1); }
+    }
+  }
+
+  // ---------------- THANH TRA ----------------
+  function spawnInspector() {
+    if (G.inspector) return;
+    const w = G.tiles.flat().filter(t => t.type === 'window');
+    const tx = w.length ? w.reduce((a, t) => a + t.x, 0) / w.length : 0;
+    const dir = Math.random() < 0.5 ? 1 : -1;
+    const mesh = Chars.makeInspector();
+    const x = -dir * (G.W / 2 + 1.5), z = G.oz - 1.05;
+    mesh.position.set(x, 0, z); world.add(mesh);
+    G.inspector = { mesh, x, z, tx, dir, phase: 'in', t: 0, mood: 'grumpy' };
+  }
+  function inspectorVerdict(clean) {
+    const I = G.inspector; if (!I) return;
+    I.phase = 'verdict'; I.t = 0; I.mood = clean ? 'happy' : 'furious';
+    if (!clean) for (const ch of G.chefs) chefMood(ch, 'sad', 1.5, '😰');
+    fxEmoteAt(I.x, 2.3, I.z, clean ? '👍' : '💢', 0.7);
+    label(clean ? 'Sạch sẽ, tốt lắm!' : 'Phạt! Ghi biên bản!', () => tv.set(I.x, 2.6, I.z), 'bubble cust ' + (clean ? 'happy' : 'angry'), 2);
+  }
+  function updateInspector(dt) {
+    const I = G.inspector; if (!I) return;
+    I.t += dt;
+    const u = I.mesh.userData;
+    let moving = false;
+    if (I.phase === 'in') {
+      const d = I.tx - I.x;
+      if (Math.abs(d) > 0.05) { I.x += Math.sign(d) * Math.min(Math.abs(d), 2.4 * dt); moving = true; I.mesh.rotation.y = Math.sign(d) * Math.PI / 2; }
+      else { I.phase = 'check'; I.mesh.rotation.y = 0; label('Để xem nào... 🧐', () => tv.set(I.x, 2.6, I.z), 'bubble cust', 2); }
+    } else if (I.phase === 'verdict' && I.t > 1.8) { I.phase = 'out'; }
+    else if (I.phase === 'out') {
+      I.x += I.dir * 2.6 * dt; moving = true; I.mesh.rotation.y = I.dir * Math.PI / 2;
+      if (Math.abs(I.x) > G.W / 2 + 2) { world.remove(I.mesh); G.inspector = null; return; }
+    }
+    I.mesh.position.x = I.x;
+    u.body.position.y = moving ? Math.abs(Math.sin(I.t * 9)) * 0.07 : 0;
+    const verdict = I.phase === 'verdict';
+    Chars.animPerson(u, {
+      t: G.time, phase: I.t * 9, moving, holdLeft: !verdict, lookY: I.phase === 'check' ? Math.sin(I.t * 1.5) * 0.6 : 0,
+      cheer: verdict && I.mood === 'happy', mood: verdict && I.mood === 'furious' ? 'furious' : null,
+    });
+    if (verdict && I.mood === 'furious' && Math.random() < dt * 8) steamHead(I.x, 1.65, I.z);
+    Chars.setFace(u.face, I.mood);
   }
 
   // ---------------- ORDERS ----------------
   function spawnOrder() {
     const recipe = pick(G.recipes);
     const max = RECIPES[recipe].time + (G.mode === 'solo' ? 25 : 0);
-    G.orders.push({ recipe, t: max, max, id: Math.random() });
+    const o = { recipe, t: max, max, id: Math.random(), cust: null };
+    const free = G.customers.filter(c => !c.order && c.sulkT <= 0);
+    if (free.length) {
+      const c = pick(free);
+      c.order = o; o.cust = c; c.nag = 4 + Math.random() * 3;
+      label(`${pick(MOOD_LINES.order)} ${RECIPES[recipe].emoji}`, () => tv.set(c.x, c.baseY + 2.0, c.z), 'bubble cust', 2);
+      c.jumpT = 0.4;
+    }
+    G.orders.push(o);
     G.ordersDirty = true;
     Audio.play('pop');
   }
@@ -860,13 +1035,20 @@ export const Game = (() => {
       const o = G.orders[i];
       o.t -= dt;
       if (o.t <= 0) {
+        o.done = 'failed';
         G.orders.splice(i, 1); G.ordersDirty = true;
         G.stats.failed++;
         G.tipMult = 1;
         const w = G.tiles.flat().find(t => t.type === 'window');
         addScore(-10, w ? w.x : 0, w ? w.z : 0, 'Khách bỏ về! -10');
         Audio.play('expire');
-        customerReact('angry');
+        const c = o.cust;
+        if (c) {
+          c.order = null; c.cd = 0;
+          customerReact('furious', 0, 0, c);
+          c.sulkT = 10; c.sulkMood = c.def.id === 'embe' ? 'cry' : c.def.id === 'nusinh' ? 'sad' : 'grumpy';
+        } else customerReact('furious');
+        for (const ch of G.chefs) chefMood(ch, 'sad', 1.6, '😢');
       }
     }
   }
@@ -895,7 +1077,7 @@ export const Game = (() => {
           if (c.warn <= 0) { Audio.play('burnWarn'); c.warn = 0.5; }
           if (Math.random() < dt * 6) smoke(t.x, t.z, 0x666666);
         }
-        if (c.burn >= 1) { c.state = 'burnt'; rebuild(holder); Audio.play('burnt'); popup('Cháy rồi!!', t.x, 1.7, t.z, 'loss'); registerChaos(); }
+        if (c.burn >= 1) { c.state = 'burnt'; rebuild(holder); Audio.play('burnt'); popup('Cháy rồi!!', t.x, 1.7, t.z, 'loss'); registerChaos(); chefMood(nearestChef(t.x, t.z), 'sad', 1.5, '😩', 'Cháy mất rồi!'); }
       }
       if (t.type === 'grill' && Math.random() < dt * 2) Audio.play('sizzle');
     }
@@ -921,7 +1103,7 @@ export const Game = (() => {
       case 'police': case 'moto': {
         const r = pick(G.lanes);
         const z = r + G.oz, dir = Math.random() < 0.5 ? 1 : -1;
-        const mesh = name === 'police' ? Models.makePolice() : Models.makeMoto();
+        const mesh = name === 'police' ? Chars.makePolice() : Chars.makeMoto({ rider: true, cargo: true, color: pick([0xe53935, 0x1e88e5, 0x8e24aa, 0x212121]) });
         mesh.position.set(-dir * (W / 2 + 2), 0, z); mesh.rotation.y = name === 'police' ? dir * Math.PI / 2 : (dir > 0 ? 0 : Math.PI);
         mesh.visible = false; world.add(mesh);
         const warn = new THREE.Mesh(new THREE.PlaneGeometry(W, 0.9), new THREE.MeshBasicMaterial({ color: 0xff1744, transparent: true, opacity: 0.3, depthWrite: false }));
@@ -929,7 +1111,7 @@ export const Game = (() => {
         G.npcs.push({ type: name, mesh, warn, x: -dir * (W / 2 + 2), z, dir, delay: name === 'moto' ? 1.6 : 2.2, speed: name === 'moto' ? 13 : 3.2, t: 0 });
         break;
       }
-      case 'inspector': G.ev.inspector = 9; break;
+      case 'inspector': G.ev.inspector = 9; spawnInspector(); break;
       case 'banana': {
         const n = 1 + (Math.random() < 0.5 ? 1 : 0);
         for (let i = 0; i < n; i++) { const t = pick(G.floorTiles); addBanana(t.x + (Math.random() - 0.5) * 0.4, t.z + (Math.random() - 0.5) * 0.4); }
@@ -967,11 +1149,24 @@ export const Game = (() => {
       n.warn.visible = false;
       n.x += n.dir * n.speed * dt;
       n.mesh.position.x = n.x;
-      if (n.type === 'police') n.mesh.position.y = Math.abs(Math.sin(n.t * 8)) * 0.08;
+      if (n.type === 'police') {
+        const u = n.mesh.userData;
+        u.body.position.y = Math.abs(Math.sin(n.t * 8)) * 0.08;
+        Chars.animPerson(u, { t: n.t, phase: n.t * 8, moving: true, wave: true });
+        Chars.setFace(u.face, n.t % 3 < 1.5 ? 'angry' : 'grumpy');
+        if (Math.random() < dt * 1.5) Audio.play('whistle');
+      } else {
+        for (const w of n.mesh.userData.wheels) w.rotation.x += dt * n.speed * 4;
+        n.mesh.userData.bike.position.y = Math.abs(Math.sin(n.t * 30)) * 0.03;
+        if (Math.random() < dt * 25) particle(n.x - n.dir * 0.9, 0.35, n.z + 0.2, 0x9e9e9e, 0.1, -n.dir * 1.5, 0.8, 0, 0.7, -0.5);
+      }
       for (const ch of G.chefs) {
         if (Math.abs(ch.x - n.x) < 0.65 && Math.abs(ch.z - n.z) < 0.7) {
           const side = ch.z >= n.z ? 1 : -1;
-          if (n.type === 'moto') hitChef(ch, n.dir * 0.6, side * 0.8, 13, pick(['Xe máy kìa!!', 'Ối giời ơi!', 'Má ơi xe!']));
+          if (n.type === 'moto') {
+            hitChef(ch, n.dir * 0.6, side * 0.8, 13, pick(['Xe máy kìa!!', 'Ối giời ơi!', 'Má ơi xe!']));
+            const r = n.mesh.userData.rider; if (r) Chars.setFace(r.userData.face, 'shock');
+          }
           else hitChef(ch, n.dir * 0.8, side * 0.6, 7, 'Dạ em dẹp ngay ạ!');
         }
       }
@@ -996,8 +1191,10 @@ export const Game = (() => {
         const dirt = G.floor.length + G.puddles.length + G.bananas.length;
         if (dirt === 0) { banner('🧐 Thanh tra: "Sạch bong! Khen!" +15'); addScore(15); Audio.play('serve'); }
         else { banner(`🧐 Thanh tra: "Bẩn quá!" ${dirt} vết bẩn → -${dirt * 5}`); addScore(-dirt * 5); Audio.play('wrong'); }
+        inspectorVerdict(dirt === 0);
       }
     }
+    updateInspector(dt);
     // Mưa
     G.rain.visible = !!ev.rain;
     if (ev.rain) {
@@ -1035,11 +1232,11 @@ export const Game = (() => {
         const t = pick(G.floorTiles);
         Audio.play('firecracker');
         for (let i = 0; i < 16; i++) spark(t.x, 0.3, t.z, i % 2 ? 0xff1744 : 0xffd600, 1, 6);
-        popup('ĐÙNG!', t.x, 1.2, t.z, 'pow');
+        fxBurst(t.x, 1.0, t.z, 'ĐÙNG!', '#ff7043');
         G.shake = Math.max(G.shake, 0.2);
         for (const ch of G.chefs) {
           if (Math.hypot(ch.x - t.x, ch.z - t.z) < 3 && ch.y === 0) {
-            ch.vy = 5.5; say(ch, pick(LINES.startle));
+            ch.vy = 5.5; ch.squash = 0.8; say(ch, pick(LINES.startle)); fxEmote(ch, '❗');
             if (ch.holding && Math.random() < 0.55) dropHeld(ch, Math.sin(ch.face) * 0.5, Math.cos(ch.face) * 0.5);
           }
         }
@@ -1090,7 +1287,9 @@ export const Game = (() => {
   // ---------------- DOM LABELS ----------------
   function label(text, getPos, cls, life, rise = 0) {
     const el = document.createElement('div');
-    el.className = 'wl ' + cls; el.textContent = text;
+    el.className = 'wl ' + cls;
+    const sp = document.createElement('span'); sp.textContent = text; el.appendChild(sp);
+    if (cls.includes('bubble')) sp.style.setProperty('--rot', ((Math.random() - 0.5) * 8).toFixed(1) + 'deg');
     overlay.appendChild(el);
     G.labels.push({ el, getPos, life, max: life, rise });
     return el;
@@ -1167,10 +1366,12 @@ export const Game = (() => {
       G.time += dt;
       updateCustomers(dt);
       for (const ch of G.chefs) {
-        const a = G.time * 0.8 + ch.id * Math.PI;
-        ch.mesh.rotation.y = a;
-        ch.mesh.userData.body.position.y = Math.abs(Math.sin(G.time * 5 + ch.id)) * 0.1;
+        const u = ch.mesh.userData;
+        ch.mesh.rotation.y = Math.sin(G.time * 0.7 + ch.id * 2) * 0.6;
+        u.body.position.y = Math.abs(Math.sin(G.time * 5 + ch.id)) * 0.1;
         ch.mesh.position.set(ch.x, 0, ch.z);
+        Chars.animPerson(u, { t: G.time, wave: ch.id === 0, cheer: ch.id === 1 });
+        Chars.setFace(u.face, 'happy');
       }
       if (G.water) world.rotation.z = Math.sin(G.time * 0.9) * 0.03;
       return;
@@ -1184,7 +1385,7 @@ export const Game = (() => {
       updateLabels(dt);
       return;
     }
-    if (G.state !== 'play') { updateLabels(dt); updateParticles(dt); return; }
+    if (G.state !== 'play') { updateLabels(dt); updateParticles(dt); updateFx(dt); return; }
 
     G.time += dt;
     G.timeLeft -= dt;
@@ -1206,6 +1407,7 @@ export const Game = (() => {
     updateEvents(dt);
     updateCustomers(dt);
     updateParticles(dt);
+    updateFx(dt);
     updateLabels(dt);
     if (api.onHud) api.onHud(G);
 
@@ -1235,7 +1437,7 @@ export const Game = (() => {
     preview(levelIndex) { build(levelIndex, 'coop'); G.state = 'preview'; },
     start(levelIndex, mode) { build(levelIndex, mode); G.state = 'countdown'; G.countdown = 3.5; paused = false; },
     setPaused(p) { paused = p; },
-    debug: { startEvent, interact, spawnOrder },
+    debug: { startEvent, interact, spawnOrder, info: () => renderer.info.render, world: () => world },
   });
   Object.defineProperties(api, {
     paused: { get: () => paused },

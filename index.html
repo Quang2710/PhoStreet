@@ -3,102 +3,169 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#2b1a12">
   <title>Phở Loạn Phố</title>
   <link rel="icon" href="./favicon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700;800&family=Phudu:wght@500;700;900&display=swap" rel="stylesheet">
 </head>
 <body>
   <div id="game"></div>
   <div id="overlay"></div>
 
   <!-- HUD -->
-  <div id="hud" class="hidden">
+  <div id="hud" aria-hidden="true">
+    <div class="rail"><i></i></div>
     <div id="orders"></div>
-    <div id="levelname"></div>
-    <div id="versus" class="hidden"></div>
+    <div id="levelname" class="hangsign"><small id="lvTag"></small><b id="lvName"></b></div>
+    <div id="versus" class="hidden">
+      <span class="vs-side p0"><svg class="ico"><use href="#i-ha"/></svg><em>Hà</em><b id="vs0">0</b></span>
+      <span class="vs-mid">Va chạm</span>
+      <span class="vs-side p1"><b id="vs1">0</b><em>Sơn</em><svg class="ico"><use href="#i-son"/></svg></span>
+    </div>
     <div id="scorebox">
-      <div class="coin">₫</div>
-      <div><div id="score">0</div><div id="tipmult">Tip x1</div></div>
+      <svg class="ico coin"><use href="#i-coin"/></svg>
+      <div class="sc"><span class="lbl">Điểm</span><b id="score">0</b></div>
+      <span id="tipmult">Tip ×1</span>
     </div>
     <div id="timerbox">
-      <div id="timer">03:00</div>
-      <div class="tbar"><i id="timerbar"></i></div>
+      <svg class="ico drum"><use href="#i-drum"/></svg>
+      <svg class="dial" viewBox="0 0 100 100"><circle class="track" cx="50" cy="50" r="45"/><circle id="timerbar" class="prog" cx="50" cy="50" r="45" pathLength="100"/></svg>
+      <div class="tcenter"><span class="lbl">Còn lại</span><b id="timer">03:00</b></div>
     </div>
     <div id="hint"></div>
   </div>
-  <div id="banner"></div>
+  <div id="banner"><div class="band"><span id="bannerText"></span></div></div>
   <div id="combo"></div>
-  <div id="countdown"></div>
+  <div id="countdown"><svg class="ico drum"><use href="#i-drum"/></svg><b></b></div>
 
   <!-- MENU -->
-  <div id="menu" class="screen">
+  <div id="menu" class="screen open">
+    <div class="lanterns" aria-hidden="true">
+      <span class="lt l1"><svg class="ico"><use href="#i-lantern"/></svg></span>
+      <span class="lt l2"><svg class="ico"><use href="#i-lantern"/></svg></span>
+      <span class="lt l3"><svg class="ico"><use href="#i-lantern"/></svg></span>
+      <span class="lt l4"><svg class="ico"><use href="#i-lantern"/></svg></span>
+    </div>
     <div class="menu-inner">
-      <div class="logo">
-        <div class="logo-top">🍜 PHỞ <span>LOẠN</span> PHỐ 🛵</div>
-        <div class="logo-sub">Nấu ăn co-op hỗn loạn giữa lòng ẩm thực đường phố Việt Nam</div>
-      </div>
-
-      <div class="section-title">Chế độ chơi</div>
-      <div id="modes" class="modes">
-        <button data-mode="coop" class="mode active"><b>👫 Co-op 2 người</b><small>Cùng bàn phím / 2 tay cầm</small></button>
-        <button data-mode="solo" class="mode"><b>🧑‍🍳 Một mình</b><small>Điều khiển 2 đầu bếp, Tab để đổi</small></button>
-        <button data-mode="versus" class="mode"><b>🤜 Bạn thân hay kẻ thù</b><small>Ai gây va chạm nhiều hơn thì thua</small></button>
-      </div>
-
-      <div class="section-title">Chọn màn</div>
-      <div id="levels" class="levels"></div>
-
-      <div class="bottom-row">
-        <div class="controls">
-          <div class="ctl p0"><h4>🔴 Bếp Hà (nón lá)</h4>
-            <p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> di chuyển</p>
-            <p><kbd>E</kbd>/<kbd>Space</kbd> nhặt / đặt · <kbd>F</kbd> (giữ) thái</p>
-            <p><kbd>Q</kbd> ném · <kbd>Shift trái</kbd> lao / húc</p></div>
-          <div class="ctl p1"><h4>🔵 Bếp Sơn (khăn rằn)</h4>
-            <p><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> di chuyển</p>
-            <p><kbd>.</kbd>/<kbd>Enter</kbd>/<kbd>Num1</kbd> nhặt · <kbd>/</kbd>/<kbd>Num2</kbd> thái</p>
-            <p><kbd>,</kbd>/<kbd>Num3</kbd> ném · <kbd>Shift phải</kbd>/<kbd>Num0</kbd> lao</p></div>
-          <div class="ctl"><h4>🎮 Tay cầm</h4>
-            <p>Cần trái di chuyển · A nhặt · X thái</p>
-            <p>B ném · RB/RT lao · Y đổi đầu bếp (solo)</p>
-            <p><kbd>Esc</kbd> tạm dừng</p></div>
-        </div>
-        <div class="howto">
-          <h4>📖 Cách nấu</h4>
-          <p>Lấy nguyên liệu từ thùng → sơ chế (thớt 🔪, nồi ♨️, vỉ nướng 🔥) → bày vào bát 🥣 → mang ra <b>cửa ra món</b> (quầy xanh).</p>
-          <p>Lao vào nhau sẽ <b>văng đồ</b>! Đồ văng trúng cửa ra món = <b>cú va ngoạn mục</b> +20. Bắt được đồ bay = cứu bóng!</p>
-          <div class="toggles">
-            <label><input type="checkbox" id="optMusic" checked> 🎵 Nhạc</label>
-            <label><input type="checkbox" id="optTTS" checked> 🗣️ Lồng tiếng (nếu máy có giọng Việt)</label>
+      <header class="logo">
+        <div class="logo-sign">
+          <div class="logo-bowl" aria-hidden="true">
+            <i class="steam s1"></i><i class="steam s2"></i><i class="steam s3"></i>
+            <svg class="ico"><use href="#i-bowl"/></svg>
+          </div>
+          <div class="sign-text">
+            <span class="sign-top">Gia truyền · Ngon – Bổ – Rẻ</span>
+            <h1>Phở <span>Loạn</span> Phố</h1>
+            <span class="sign-bot">Số 36 phố Hỗn Loạn · Mở cửa cả ngày</span>
           </div>
         </div>
+        <p class="logo-sub">Nấu ăn co-op hỗn loạn giữa lòng ẩm thực đường phố Việt Nam</p>
+      </header>
+
+      <h2 class="section-title" style="--i:0"><span>Chế độ chơi</span></h2>
+      <div id="modes" class="modes">
+        <button type="button" data-mode="coop" class="mode active" aria-pressed="true" style="--i:1">
+          <span class="mode-ico"><svg class="ico"><use href="#i-ha"/></svg><svg class="ico"><use href="#i-son"/></svg></span>
+          <span class="mode-txt"><b>Co-op 2 người</b><small>Cùng bàn phím / 2 tay cầm</small></span>
+        </button>
+        <button type="button" data-mode="solo" class="mode" aria-pressed="false" style="--i:2">
+          <span class="mode-ico solo"><svg class="ico"><use href="#i-ha"/></svg><i>⇄</i><svg class="ico"><use href="#i-son"/></svg></span>
+          <span class="mode-txt"><b>Một mình</b><small>Điều khiển 2 đầu bếp, Tab để đổi</small></span>
+        </button>
+        <button type="button" data-mode="versus" class="mode" aria-pressed="false" style="--i:3">
+          <span class="mode-ico versus"><svg class="ico"><use href="#i-ha"/></svg><i>⚡</i><svg class="ico"><use href="#i-son"/></svg></span>
+          <span class="mode-txt"><b>Bạn thân hay kẻ thù</b><small>Ai gây va chạm nhiều hơn thì thua</small></span>
+        </button>
+      </div>
+
+      <h2 class="section-title" style="--i:3"><span>Chọn màn</span></h2>
+      <div id="levels" class="levels"></div>
+
+      <h2 class="section-title" style="--i:8"><span>Cách chơi</span></h2>
+      <div class="guide">
+        <section class="ctl p0" style="--i:9">
+          <h3><svg class="ico av"><use href="#i-ha"/></svg><span>Bếp Hà <small>nón lá</small></span></h3>
+          <dl>
+            <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt><dd>di chuyển</dd>
+            <dt><kbd>E</kbd><kbd>Space</kbd></dt><dd>nhặt / đặt</dd>
+            <dt><kbd>F</kbd><small>giữ</small></dt><dd>thái</dd>
+            <dt><kbd>Q</kbd></dt><dd>ném</dd>
+            <dt><kbd>Shift trái</kbd></dt><dd>lao / húc</dd>
+          </dl>
+        </section>
+        <section class="ctl p1" style="--i:10">
+          <h3><svg class="ico av"><use href="#i-son"/></svg><span>Bếp Sơn <small>khăn rằn</small></span></h3>
+          <dl>
+            <dt><kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd></dt><dd>di chuyển</dd>
+            <dt><kbd>.</kbd><kbd>Enter</kbd><kbd>Num1</kbd></dt><dd>nhặt / đặt</dd>
+            <dt><kbd>/</kbd><kbd>Num2</kbd></dt><dd>thái</dd>
+            <dt><kbd>,</kbd><kbd>Num3</kbd></dt><dd>ném</dd>
+            <dt><kbd>Shift phải</kbd><kbd>Num0</kbd></dt><dd>lao / húc</dd>
+          </dl>
+        </section>
+        <section class="ctl pad" style="--i:11">
+          <h3><svg class="ico av"><use href="#i-pad"/></svg><span>Tay cầm <small>cần trái để đi</small></span></h3>
+          <dl>
+            <dt><kbd>A</kbd></dt><dd>nhặt / đặt</dd>
+            <dt><kbd>X</kbd></dt><dd>thái</dd>
+            <dt><kbd>B</kbd></dt><dd>ném</dd>
+            <dt><kbd>RB</kbd><kbd>RT</kbd></dt><dd>lao</dd>
+            <dt><kbd>Y</kbd></dt><dd>đổi bếp (solo)</dd>
+          </dl>
+        </section>
+        <section class="howto" style="--i:12">
+          <h3><span>Cách nấu</span></h3>
+          <ol class="flow">
+            <li><b>📦</b>Lấy nguyên liệu</li>
+            <li><b>🔪</b>Thái · luộc · nướng</li>
+            <li><b>🥣</b>Bày vào bát</li>
+            <li><b>🛎️</b>Ra cửa món</li>
+          </ol>
+          <p>Lao vào nhau sẽ <b>văng đồ</b>! Đồ văng trúng cửa ra món = <b>cú va ngoạn mục</b> +20. Bắt được đồ bay = cứu bóng!</p>
+          <div class="toggles">
+            <label class="switch"><input type="checkbox" id="optMusic" checked><i></i>Nhạc</label>
+            <label class="switch"><input type="checkbox" id="optTTS" checked><i></i>Lồng tiếng <small>(nếu máy có giọng Việt)</small></label>
+            <span class="esc"><kbd>Esc</kbd> tạm dừng</span>
+          </div>
+        </section>
       </div>
     </div>
   </div>
 
   <!-- PAUSE -->
-  <div id="pause" class="screen hidden">
-    <div class="panel">
-      <h2>⏸️ Tạm dừng</h2>
-      <button id="btnResume" class="big">Chơi tiếp</button>
-      <button id="btnRestart">Chơi lại màn</button>
-      <button id="btnMenu">Về menu</button>
+  <div id="pause" class="screen">
+    <div class="panel paper">
+      <div class="panel-badge"><svg class="ico"><use href="#i-bowl"/></svg></div>
+      <h2>Tạm dừng</h2>
+      <p class="muted">Nghỉ tay một chút — khách vẫn đang ngồi chờ đấy!</p>
+      <button type="button" id="btnResume" class="btn primary">Chơi tiếp</button>
+      <button type="button" id="btnRestart" class="btn">Chơi lại màn</button>
+      <button type="button" id="btnMenu" class="btn">Về menu</button>
+      <p class="panel-note"><kbd>Esc</kbd> để chơi tiếp</p>
     </div>
   </div>
 
   <!-- RESULT -->
-  <div id="result" class="screen hidden">
-    <div class="panel wide">
-      <h2 id="resTitle">Hết giờ!</h2>
-      <div id="resStars" class="stars"></div>
-      <div id="resScore" class="res-score"></div>
-      <div id="resVersus"></div>
-      <div id="resStats" class="res-stats"></div>
-      <div class="row">
-        <button id="btnAgain">Chơi lại</button>
-        <button id="btnNext" class="big">Màn tiếp ▶</button>
-        <button id="btnMenu2">Menu</button>
+  <div id="result" class="screen">
+    <div class="receipt-wrap">
+      <div class="panel receipt">
+        <div class="rc-head">
+          <span class="rc-shop">Phở Loạn Phố</span>
+          <span class="rc-sub" id="resLevel">Phiếu tổng kết</span>
+        </div>
+        <h2 id="resTitle">Hết giờ!</h2>
+        <div id="resStars" class="seals"></div>
+        <div class="res-score"><b id="resNum">0</b><span>điểm</span><em id="resRecord" class="stamp-rec">Kỷ lục mới!</em></div>
+        <div id="resTrack" class="res-track"></div>
+        <div id="resVersus"></div>
+        <div id="resStats" class="ledger"></div>
+        <div class="row">
+          <button type="button" id="btnAgain" class="btn">Chơi lại</button>
+          <button type="button" id="btnNext" class="btn primary">Màn tiếp ▶</button>
+          <button type="button" id="btnMenu2" class="btn">Menu</button>
+        </div>
       </div>
     </div>
   </div>

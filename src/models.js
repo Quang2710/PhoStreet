@@ -4,10 +4,17 @@ import { INGREDIENTS } from './data.js';
 // ===== Dựng mô hình 3D bằng hình khối cơ bản (stylized / chibi) =====
 export const Models = (() => {
   const matCache = new Map();
+  // bảng 3 nấc sáng cho kiểu tô hoạt hình (toon shading)
+  const toonGrad = (() => {
+    const d = new Uint8Array([110, 110, 110, 255, 185, 185, 185, 255, 255, 255, 255, 255]);
+    const t = new THREE.DataTexture(d, 3, 1, THREE.RGBAFormat);
+    t.minFilter = t.magFilter = THREE.NearestFilter; t.needsUpdate = true;
+    return t;
+  })();
   function M(color, opts = {}) {
     const key = color + JSON.stringify(opts);
     if (matCache.has(key)) return matCache.get(key);
-    const m = new THREE.MeshLambertMaterial(Object.assign({ color }, opts));
+    const m = new THREE.MeshToonMaterial(Object.assign({ color, gradientMap: toonGrad }, opts));
     matCache.set(key, m);
     return m;
   }
@@ -39,20 +46,39 @@ export const Models = (() => {
     return checkerTex;
   }
 
-  // ---- Sprite nhãn (emoji + chữ) ----
-  function labelSprite(emoji, text, bg = 'rgba(255,255,255,0.92)') {
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath();
+  }
+  // chữ to nhất vừa khung
+  function fitFont(g, text, weight, family, size, maxW) {
+    do { g.font = `${weight} ${size}px ${family}`; size -= 2; } while (g.measureText(text).width > maxW && size > 10);
+  }
+  const SIGN_FONT = 'Phudu, "Be Vietnam Pro", "Arial Black", sans-serif';
+  const TEXT_FONT = '"Be Vietnam Pro", "Segoe UI", Arial, sans-serif';
+
+  // ---- Sprite nhãn thùng: đĩa men lam + dải tên đỏ ----
+  function labelSprite(emoji, text) {
     const c = document.createElement('canvas'); c.width = 256; c.height = 256;
     const g = c.getContext('2d');
-    g.fillStyle = bg;
-    g.beginPath(); g.arc(128, 100, 92, 0, Math.PI * 2); g.fill();
-    g.lineWidth = 8; g.strokeStyle = '#3e2723'; g.stroke();
-    g.font = '110px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
+    g.beginPath(); g.arc(128, 100, 90, 0, Math.PI * 2);
+    g.fillStyle = '#fbf6ea'; g.fill();
+    g.lineWidth = 9; g.strokeStyle = '#2a1810'; g.stroke();
+    g.beginPath(); g.arc(128, 100, 76, 0, Math.PI * 2);
+    g.lineWidth = 6; g.strokeStyle = '#2457a0'; g.stroke();
+    g.beginPath(); g.arc(128, 100, 68, 0, Math.PI * 2);
+    g.lineWidth = 2; g.strokeStyle = 'rgba(36,87,160,.45)'; g.stroke();
+    g.font = '96px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif';
     g.textAlign = 'center'; g.textBaseline = 'middle';
     g.fillText(emoji, 128, 106);
     if (text) {
-      g.font = 'bold 38px "Segoe UI",Arial,sans-serif';
-      g.lineWidth = 8; g.strokeStyle = '#3e2723';
-      g.strokeText(text, 128, 222); g.fillStyle = '#fff'; g.fillText(text, 128, 222);
+      fitFont(g, text, 800, TEXT_FONT, 36, 210);
+      const w = Math.min(248, g.measureText(text).width + 34);
+      roundRect(g, 128 - w / 2, 192, w, 54, 27);
+      g.fillStyle = '#c62f22'; g.fill();
+      g.lineWidth = 6; g.strokeStyle = '#2a1810'; g.stroke();
+      g.fillStyle = '#ffe9a8'; g.fillText(text, 128, 221);
     }
     const tex = new THREE.CanvasTexture(c);
     const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false }));
@@ -60,112 +86,65 @@ export const Models = (() => {
     return sp;
   }
 
-  function textPlane(text, w, h, bg, fg, font = 'bold 72px "Segoe UI",Arial') {
-    const c = document.createElement('canvas'); c.width = 1024; c.height = Math.round(1024 * h / w);
+  // ---- Biển hiệu kẻ tay: nền sơn, viền kép, đinh tán, chữ lớn + dòng phụ ----
+  function signBoard({ title, sub, bg, fg, edge }, w, h) {
+    const W = 1024, H = Math.round(1024 * h / w);
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
     const g = c.getContext('2d');
-    g.fillStyle = bg; g.fillRect(0, 0, c.width, c.height);
-    let size = Math.round(c.height * 0.62);
-    do { g.font = font.replace(/\d+px/, size + 'px'); size -= 4; } while (g.measureText(text).width > c.width * 0.9 && size > 10);
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, bg[0]); grad.addColorStop(1, bg[1]);
+    roundRect(g, 5, 5, W - 10, H - 10, 20);
+    g.fillStyle = grad; g.fill();
+    g.lineWidth = 10; g.strokeStyle = edge; g.stroke();
+    roundRect(g, 22, 22, W - 44, H - 44, 10);
+    g.lineWidth = 3; g.globalAlpha = 0.6; g.stroke(); g.globalAlpha = 1;
+    g.fillStyle = edge;
+    for (const [x, y] of [[36, 36], [W - 36, 36], [36, H - 36], [W - 36, H - 36]]) { g.beginPath(); g.arc(x, y, 7, 0, Math.PI * 2); g.fill(); }
     g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.shadowColor = fg; g.shadowBlur = 18; g.fillStyle = fg;
-    g.fillText(text, c.width / 2, c.height / 2);
+    const ty = H * (sub ? 0.43 : 0.52);
+    fitFont(g, title, 900, SIGN_FONT, Math.round(H * (sub ? 0.5 : 0.62)), W * 0.84);
+    g.fillStyle = 'rgba(0,0,0,.28)'; g.fillText(title, W / 2 + 3, ty + 6);
+    g.fillStyle = fg; g.fillText(title, W / 2, ty);
+    if (sub) {
+      if ('letterSpacing' in g) g.letterSpacing = '5px';
+      fitFont(g, sub, 700, SIGN_FONT, Math.round(H * 0.16), W * 0.8);
+      g.globalAlpha = 0.9; g.fillText(sub, W / 2, H * 0.79); g.globalAlpha = 1;
+    }
     const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 4;
     return new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
   }
 
-  // ================= ĐẦU BẾP =================
-  function makeChef(opt) {
-    const g = new THREE.Group();
-    const skin = 0xffd7b0;
-    const body = new THREE.Group(); g.add(body);
-    body.add(cyl(0.07, 0.07, 0.24, 0x37474f, -0.11, 0.12, 0));
-    body.add(cyl(0.07, 0.07, 0.24, 0x37474f, 0.11, 0.12, 0));
-    body.add(cyl(0.24, 0.3, 0.48, opt.shirt, 0, 0.47, 0));
-    const apron = box(0.36, 0.34, 0.04, 0xfafafa, 0, 0.42, 0.27); body.add(apron);
-    body.add(box(0.12, 0.08, 0.01, opt.shirt, 0, 0.45, 0.295)); // logo quán phở
-    const head = new THREE.Group(); head.position.y = 0.97; body.add(head);
-    head.add(sph(0.29, skin, 0, 0, 0));
-    head.add(sph(0.04, 0x212121, -0.1, 0.03, 0.26, 8));
-    head.add(sph(0.04, 0x212121, 0.1, 0.03, 0.26, 8));
-    head.add(sph(0.045, 0xff8a80, -0.17, -0.06, 0.22, 8));
-    head.add(sph(0.045, 0xff8a80, 0.17, -0.06, 0.22, 8));
-    const mouth = box(0.08, 0.025, 0.02, 0x6d2b2b, 0, -0.1, 0.27); head.add(mouth);
-    head.add(sph(0.3, 0x2b1b12, 0, 0.06, -0.04)); head.children[head.children.length - 1].scale.set(1, 0.85, 1);
-    if (opt.hat === 'nonla') {
-      const hat = mesh(new THREE.ConeGeometry(0.52, 0.32, 24), M(0xe9d38f), 0, 0.33, 0);
-      head.add(hat);
-      head.add(rx(torus(0.3, 0.015, 0xb8a060, 0, 0.2, 0)));
-    } else {
-      const band = mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.12, 20, 1, true), new THREE.MeshLambertMaterial({ map: checker(), side: THREE.DoubleSide }), 0, 0.12, 0);
-      head.add(band);
-      const knot = sph(0.07, new THREE.MeshLambertMaterial({ map: checker() }), 0, 0.12, -0.3); head.add(knot);
-      const scarf = mesh(new THREE.TorusGeometry(0.2, 0.06, 8, 18), new THREE.MeshLambertMaterial({ map: checker() }), 0, 0.72, 0);
-      scarf.rotation.x = Math.PI / 2; body.add(scarf);
+  // ---- Gạch bông: hoa 4 cánh giữa viên, 1/4 vòng tròn ở góc (4 viên ghép thành hoa tròn), lưới thoi mảnh ----
+  const gachCache = new Map();
+  function gachBong([base, a, b]) {
+    const key = base + a + b;
+    if (gachCache.has(key)) return gachCache.get(key);
+    const c = document.createElement('canvas'); c.width = c.height = 256;
+    const g = c.getContext('2d');
+    g.fillStyle = base; g.fillRect(0, 0, 256, 256);
+    g.strokeStyle = a; g.lineWidth = 5;
+    g.beginPath(); g.moveTo(128, 0); g.lineTo(256, 128); g.lineTo(128, 256); g.lineTo(0, 128); g.closePath(); g.stroke();
+    for (const [x, y] of [[0, 0], [256, 0], [0, 256], [256, 256]]) {
+      g.fillStyle = a; g.beginPath(); g.arc(x, y, 62, 0, Math.PI * 2); g.fill();
+      g.fillStyle = base; g.beginPath(); g.arc(x, y, 46, 0, Math.PI * 2); g.fill();
+      g.fillStyle = b; g.beginPath(); g.arc(x, y, 26, 0, Math.PI * 2); g.fill();
     }
-    const handL = sph(0.09, skin, -0.32, 0.5, 0.05), handR = sph(0.09, skin, 0.32, 0.5, 0.05);
-    body.add(handL, handR);
-    const hold = new THREE.Object3D(); hold.position.set(0, 0.62, 0.48); body.add(hold);
-    // vòng tròn dưới chân (màu người chơi)
-    const ring = new THREE.Mesh(new THREE.RingGeometry(0.36, 0.46, 32), new THREE.MeshBasicMaterial({ color: opt.ring, transparent: true, opacity: 0.85 }));
-    ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; g.add(ring);
-    // sao chóng mặt
-    const stars = new THREE.Group(); stars.position.y = 1.45; stars.visible = false;
-    for (let i = 0; i < 3; i++) {
-      const s = mesh(new THREE.OctahedronGeometry(0.07), M(0xffeb3b, { emissive: 0x887700 }), Math.cos(i * 2.1) * 0.3, 0, Math.sin(i * 2.1) * 0.3, false);
-      stars.add(s);
+    g.save(); g.translate(128, 128);
+    for (let i = 0; i < 4; i++) {
+      g.rotate(Math.PI / 2);
+      g.fillStyle = b; g.beginPath(); g.ellipse(0, -36, 17, 32, 0, 0, Math.PI * 2); g.fill();
+      g.save(); g.rotate(Math.PI / 4); g.fillStyle = a; g.beginPath(); g.ellipse(0, -52, 9, 20, 0, 0, Math.PI * 2); g.fill(); g.restore();
     }
-    body.add(stars);
-    // đèn pin cá nhân (khi mất điện)
-    const lamp = new THREE.PointLight(0xffe0a0, 0, 4.5);
-    lamp.position.set(0, 1.6, 0.3); g.add(lamp);
-    g.userData = { body, head, handL, handR, hold, stars, ring, mouth, lamp };
-    return g;
-  }
-
-  function makeCustomer(def) {
-    const g = new THREE.Group();
-    const s = def.small ? 0.7 : 1;
-    const inner = new THREE.Group(); inner.scale.setScalar(s); g.add(inner);
-    inner.add(cyl(0.22, 0.27, 0.42, def.shirt, 0, 0.55, 0));
-    const head = new THREE.Group(); head.position.y = 1.0; inner.add(head);
-    head.add(sph(0.26, 0xf3c9a0, 0, 0, 0));
-    head.add(sph(0.035, 0x212121, -0.09, 0.03, 0.23, 8));
-    head.add(sph(0.035, 0x212121, 0.09, 0.03, 0.23, 8));
-    if (def.hat === 'helmet') { const h = sph(0.29, 0x388e3c, 0, 0.08, 0); h.scale.y = 0.75; head.add(h); }
-    else if (def.hat === 'nonla') head.add(mesh(new THREE.ConeGeometry(0.48, 0.3, 20), M(0xe9d38f), 0, 0.3, 0));
-    else if (def.hat === 'cap') { head.add(sph(0.27, 0xd32f2f, 0, 0.1, 0)); head.add(box(0.3, 0.03, 0.2, 0xd32f2f, 0, 0.12, 0.22)); }
-    else { const h = sph(0.27, 0x3e2723, 0, 0.08, -0.03); h.scale.y = 0.8; head.add(h); }
-    g.userData = { head, inner };
-    return g;
-  }
-
-  function makePolice() {
-    const g = new THREE.Group();
-    g.add(cyl(0.08, 0.08, 0.3, 0x33402a, -0.12, 0.15, 0), cyl(0.08, 0.08, 0.3, 0x33402a, 0.12, 0.15, 0));
-    g.add(cyl(0.27, 0.32, 0.55, 0x6b7d3a, 0, 0.57, 0));
-    g.add(box(0.5, 0.05, 0.1, 0xc62828, 0, 0.75, 0.25));
-    const head = sph(0.27, 0xf3c9a0, 0, 1.08, 0); g.add(head);
-    g.add(cyl(0.3, 0.27, 0.12, 0x4e5d2a, 0, 1.33, 0), box(0.6, 0.04, 0.6, 0x4e5d2a, 0, 1.27, 0));
-    g.add(rx(torus(0.29, 0.025, 0xd32f2f, 0, 1.33, 0)));
-    g.add(sph(0.04, 0x212121, -0.09, 1.1, 0.24, 8), sph(0.04, 0x212121, 0.09, 1.1, 0.24, 8));
-    g.add(rx(cyl(0.03, 0.03, 0.12, 0xffeb3b, 0.05, 1.0, 0.3)));
-    return g;
-  }
-
-  function makeMoto() {
-    const g = new THREE.Group();
-    const w1 = torus(0.22, 0.08, 0x212121, 0, 0.3, 0.55); w1.rotation.y = Math.PI / 2;
-    const w2 = torus(0.22, 0.08, 0x212121, 0, 0.3, -0.55); w2.rotation.y = Math.PI / 2;
-    g.add(w1, w2);
-    g.add(box(0.35, 0.3, 1.1, 0xe53935, 0, 0.5, 0));
-    g.add(box(0.32, 0.12, 0.6, 0x212121, 0, 0.72, -0.15));
-    g.add(box(0.5, 0.06, 0.06, 0x9e9e9e, 0, 0.95, 0.5));
-    g.add(cyl(0.22, 0.27, 0.45, 0x1565c0, 0, 1.0, -0.1));
-    g.add(sph(0.28, 0xffffff, 0, 1.45, -0.1));
-    const light = sph(0.08, M(0xffffcc, { emissive: 0xffff88 }), 0, 0.7, 0.6, 8); g.add(light);
-    g.rotation.y = Math.PI / 2; // chạy theo trục X
-    const wrap = new THREE.Group(); wrap.add(g);
-    return wrap;
+    g.fillStyle = base; g.beginPath(); g.arc(0, 0, 13, 0, Math.PI * 2); g.fill();
+    g.fillStyle = a; g.beginPath(); g.arc(0, 0, 7, 0, Math.PI * 2); g.fill();
+    g.restore();
+    g.strokeStyle = 'rgba(0,0,0,.18)'; g.lineWidth = 4; g.strokeRect(0, 0, 256, 256); // mạch vữa
+    const tex = new THREE.CanvasTexture(c);
+    tex.anisotropy = 8;
+    const mat = new THREE.MeshToonMaterial({ map: tex, gradientMap: toonGrad });
+    gachCache.set(key, mat);
+    return mat;
   }
 
   // ================= NGUYÊN LIỆU =================
@@ -314,14 +293,14 @@ export const Models = (() => {
         g = counterBase(theme, 0x37474f);
         const ring = torus(0.26, 0.04, M(0x424242), 0, 0.93, 0); ring.rotation.x = Math.PI / 2; g.add(ring);
         const flame = torus(0.18, 0.04, M(0xff5722, { emissive: 0xff3d00 }), 0, 0.93, 0); flame.rotation.x = Math.PI / 2;
-        g.add(flame); g.userData.flame = flame;
+        flame.userData.keep = true; g.add(flame); g.userData.flame = flame;
         for (const [x, z] of [[-0.42, -0.42], [0.42, -0.42], [-0.42, 0.42], [0.42, 0.42]]) g.add(box(0.06, 0.06, 0.06, 0xbdbdbd, x, 0.88, z));
         break;
       }
       case 'G': {
         g = counterBase(theme, 0x4e342e);
         const coal = box(0.8, 0.06, 0.8, M(0xff6f00, { emissive: 0xbf360c }), 0, 0.93, 0);
-        g.add(coal); g.userData.flame = coal;
+        coal.userData.keep = true; g.add(coal); g.userData.flame = coal;
         for (let i = 0; i < 6; i++) g.add(box(0.85, 0.02, 0.03, 0x212121, 0, 0.98, -0.37 + i * 0.15));
         break;
       }
@@ -409,15 +388,10 @@ export const Models = (() => {
     m.rotation.x = -Math.PI / 2; m.position.y = 0.025; m.receiveShadow = true;
     return m;
   }
-  function makeMotoParked(color) {
-    const m = makeMoto();
-    m.children[0].children.forEach((c, i) => { if (i === 2 && c.material) c.material = M(color); });
-    return m;
-  }
-
   return {
-    M, box, cyl, sph, torus, mesh, labelSprite, textPlane,
-    makeChef, makeCustomer, makePolice, makeMoto, makeMotoParked, makeIngredient, makePlate, makePot, makeTile,
+    M, box, cyl, sph, torus, mesh, rx, checker, labelSprite, signBoard, gachBong,
+    toon: (o) => new THREE.MeshToonMaterial(Object.assign({ gradientMap: toonGrad }, o)),
+    makeIngredient, makePlate, makePot, makeTile,
     makeStool, makeLowTable, makeTree, makePine, makeLantern, makeBanana, makePuddle,
   };
 })();
